@@ -8,7 +8,18 @@ start:
 
     # Initialize register
     xor %ax, %ax
+    mov %ax, %ds
+    mov %ax, %es
     mov %ax, %ss
+
+    # override drive number for weird BIOS
+    mov drive, %al
+    and $0x40, %al
+    test %al, %al
+    jz .sane
+    movb $0x80, drive
+    xor %al, %al
+    .sane:
 
     # Initialize stack
     mov $0x7c00, %sp
