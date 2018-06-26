@@ -163,7 +163,7 @@ error_str:
 dapack:
     .byte 0x10
     .byte 0
-    .word 128
+    .word 1
     .word 0x7e00
     .word 0
     .long 1
