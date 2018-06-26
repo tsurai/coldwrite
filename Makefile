@@ -32,7 +32,7 @@ STAGE2 := stage2.elf
 .PHONY: all clean
 
 all: $(DISK) $(STAGE1) $(STAGE2)
-	dd if=stage1.bin of=disk.img bs=446 count=1 conv=notrunc
+	dd if=stage1.bin of=disk.img conv=notrunc
 	dd if=stage2.bin of=disk.img obs=512 seek=1 conv=notrunc
 	dd if=payload.bin of=disk.img obs=1024 seek=1 conv=notrunc
 

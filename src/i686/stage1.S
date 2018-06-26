@@ -17,12 +17,8 @@ start:
     # 0x500 which is guaranteed free conventional memory
     call save_vga_font
 
-    # Try to enter a higher VBE mode and store the
-    # ModeInfoBlock at 0x1500 in memory
-    call vbe_change_mode
-
     # Get the system memory map and store it at
-    # offset 0x1600 in memory
+    # offset 0x1500 in memory
     call save_memory_map
 
     mov $loading_str, %si
@@ -84,7 +80,7 @@ save_memory_map:
     # Set the save location for the memory map
     xor %ax, %ax
     mov %ax, %es
-    mov $0x1602, %di
+    mov $0x1500, %di
 
     # Set the initial offset to zero
     xor %ebx, %ebx
@@ -119,121 +115,12 @@ save_memory_map:
     clc
     ret
 
-vbe_change_mode:
-    # Set VBEInfoBlock save location
-    # 0x1500 is ~30KiB of guaranteed free conventional memory
-    xor %ax, %ax
-    mov %ax, %es
-    mov $0x1600, %di
-
-    # Indicate that we want VBE 3.0 information by setting
-    # the signature to VBE2
-    movl $0x32454256, 0x1600
-
-    # Get VBE controller informations
-    mov $0x4f00, %ax
-    int $0x10
-
-    # Check the return status code
-    cmp $0x004f, %ax
-    jne vbe_error
-
-    # Check the VESA signature
-    movl 0x1600, %eax
-    cmp $0x41534556, %eax
-    jne vbe_error
-
-    # Check for a VESA version higher than 1.x
-    movb 0x1604, %al
-    cmp $0x01, %al
-    je vbe_error
-
-    call vbe_iterate_modes
-    ret
-
-vbe_iterate_modes:
-    # Set ds:si to point to the VBE mode list
-    xor %eax, %eax
-    mov %ax, %ds
-    movw 0x160e, %si
-
-    # Iterate over the mode list
-    .loop:
-    lodsw
-    # Stop at the delimiter element
-    cmp $0xffff, %ax
-    je .end
-
-    # Query mode specific info
-    call vbe_get_mode_info
-    cmp $0x01, %bx
-    jne .loop
-
-    # Set the VBE mode
-    call vbe_set_mode
-
-    .end:
-    ret
-
-vbe_get_mode_info:
-    # Clear return status
-    xor %bx, %bx
-
-    # Save the mode info block right after the
-    # controller info block
-    mov $0x1500, %di
-
-    # Get the VBE mode info for a specific mode
-    mov %ax, %cx
-    mov $0x4f01, %ax
-    int $0x10
-
-    # Check the return status code
-    cmp $0x004f, %ax
-    jne vbe_error
-
-    # Load attribute word into ax
-    # Check for graphics mode and linear buffer
-    movw 0x1500, %ax
-    and $0xb8, %ax
-    cmp $0xb8, %ax
-    jne .skip
-
-    # Check for 1920x1080 resolution
-    movl 0x1512, %eax
-    cmp $0x04380780, %eax
-    jne .skip
-
-    # Check for 32bit colors resolution
-    movb 0x1519, %al
-    cmp $0x20, %al
-    jne .skip
-
-    # Indicate that the right mode has been found
-    mov $0x01, %bx
-
-    .skip:
-    ret
-
-vbe_set_mode:
-    # set the new VBE mode
-    mov %cx, %bx
-    mov $0x4f02, %ax
-    int $0x10
-
-    # check the return status code
-    cmp $0x004f, %ax
-    jne throw_error
-    ret
-
 load:
     mov drive, %dl
-    xor %ax, %ax
-    mov %ax, %ds
     mov $dapack, %si
     mov $0x42, %ah
     int $0x13
-    jc throw_error
+    jc load_error
     ret
 
 throw_error:
@@ -244,7 +131,7 @@ throw_error:
     cli
     hlt
 
-read_error:
+load_error:
     mov $0x31, %cl
     jmp throw_error
 
@@ -252,15 +139,10 @@ magic_error:
     mov $0x32, %cl
     jmp throw_error
 
-vbe_error:
-    mov $0x33, %cl
-    jmp throw_error
-
 print16:
     lodsb
     test %al, %al
     jz .done
-    mov $0x07, %bl 
     mov $0x0e, %ah
     int $0x10
     jmp print16
