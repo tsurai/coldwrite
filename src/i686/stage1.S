@@ -12,15 +12,6 @@ start:
     mov %ax, %es
     mov %ax, %ss
 
-    # override drive number for weird BIOS
-    mov drive, %al
-    and $0x40, %al
-    test %al, %al
-    jz .sane
-    movb $0x80, drive
-    xor %al, %al
-    .sane:
-
     # Initialize stack
     mov $0x7c00, %sp
 
@@ -127,12 +118,26 @@ save_memory_map:
     ret
 
 load:
+    # read from disk using BIOS int 13h
     mov drive, %dl
     mov $dapack, %si
     mov $0x42, %ah
     int $0x13
-    jc load_error
+    jc .retry
     ret
+
+    # retry to read from a different drive
+    .retry:
+
+    # test if drive #0 has been tried
+    test $0x00, %dl
+    jne load_error
+
+    # and use 0x80 instead
+    movb $0x80, drive
+
+    # try to read again
+    jmp load
 
 throw_error:
     mov $error_str, %si
