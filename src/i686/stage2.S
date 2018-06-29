@@ -32,6 +32,12 @@ start:
     out %al, $0x92
     .a20set:
 
+    # get the vga test buffer address and cursor position
+    call get_vga_info
+
+    mov $writing_str, %esi
+    call print32
+
     # initialize all necessary register to zero
     xor %eax, %eax
     mov %eax, %ebx
@@ -45,6 +51,9 @@ start:
 
     # read data from disk into memory
     call ata_pio28_read
+
+    mov $done_str, %esi
+    call print32
 
     cli
     hlt
@@ -168,4 +177,124 @@ ata_pio28_read:
     jnz ata_pio28_read
     ret
 
+    .read_error:
+    mov $failed_str, %esi
+    call print32
     ret
+
+get_vga_info:
+    # read the equipment word from the BDA
+    mov (0x410), %ax
+
+    # bit 4-5 signal the VGA display mode
+    and $0x30, %ax
+    cmp $0x20, %ax
+    jg .monochrome
+
+    # use color mode buffer address
+    movl $0xb8000, video_memory
+    jmp .get_pos
+
+    # use monochrome mode buffer address
+    .monochrome:
+    movl $0xb0000, video_memory
+
+    .get_pos:
+    call get_cursor_pos
+    ret
+
+get_cursor_pos:
+    # select high cursor position register
+    mov $0x3d4, %dx
+    mov $0x0e, %al
+    out %al, %dx
+
+    # get low cursor position byte
+    mov $0x3d5, %dx
+    in %dx, %al
+    mov %al, %bh
+
+    # select high cursor position register
+    mov $0x3d4, %dx
+    mov $0x0f, %al
+    out %al, %dx
+
+    # get high cursor position byte
+    mov $0x3d5, %dx
+    in %dx, %al
+    mov %al, %bl
+
+    # save the buffer cursor offset
+    mov %bx, video_offset
+    ret
+
+set_cursor_pos:
+    # select high cursor position register
+    mov $0x3d4, %dx
+    mov $0x0e, %al
+    out %al, %dx
+
+    # set high cursor position byte
+    mov $0x3d5, %dx
+    mov %bh, %al
+    out %al, %dx
+
+    # select high cursor postition register
+    mov $0x3d4, %dx
+    mov $0x0f, %al
+    out %al, %dx
+
+    # set high cursor position byte
+    mov $0x3d5, %dx
+    mov %bl, %al
+    out %al, %dx
+
+    # save the buffer cursor offset
+    mov %bx, video_offset
+    ret
+
+print32:
+    # clear ecx
+    xor %ecx, %ecx
+
+    mov video_memory, %edi
+    mov video_offset, %cx
+
+    # set black background with light grey foreground color
+    mov $0x07, %ah
+
+    # load the first character
+    movb (%esi), %al
+
+    .print_cont:
+    movw %ax, (%edi,%ecx,2)
+
+    # increase source and offset pointer
+    inc %esi
+    inc %ecx
+
+    # load the next byte
+    movb (%esi), %al
+
+    # continue until it's a NULL byte
+    test %al, %al
+    jnz .print_cont
+
+    # set the new cursor position
+    mov %ecx, %ebx
+    call set_cursor_pos
+    ret
+
+.section .rodata
+writing_str:
+    .string "Writing payload into memory... "
+done_str:
+    .string "done"
+failed_str:
+    .string "failed"
+
+.section .bss
+video_memory:
+    .quad 0
+video_offset:
+    .word 0
