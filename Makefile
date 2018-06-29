@@ -28,10 +28,11 @@ OBJS := $(OBJS:%=$(BUILD)%)
 DISK := disk.img
 STAGE1 := stage1.bin
 STAGE2 := stage2.elf
+PAYLOAD := payload.bin
 
 .PHONY: all clean
 
-all: $(DISK) $(STAGE1) $(STAGE2)
+all: $(DISK) $(STAGE1) $(STAGE2) $(PAYLOAD)
 	dd if=stage1.bin of=disk.img conv=notrunc
 	dd if=stage2.bin of=disk.img obs=512 seek=1 conv=notrunc
 	dd if=payload.bin of=disk.img obs=1024 seek=1 conv=notrunc
@@ -43,8 +44,8 @@ test: all
 	$(QEMU) -no-reboot -d int -drive file=disk.img,format=raw
 
 $(DISK):
-	# create a 100mb disk image with a valid boot partition and MBR
-	dd if=/dev/zero of=disk.img bs=1000 count=100000
+	# create a 3kb disk image with a valid boot partition and MBR
+	dd if=/dev/zero of=disk.img bs=1000 count=3
 	(echo o; echo n; echo p; echo 1; echo ""; echo ""; echo a; echo w; echo q) | sudo fdisk disk.img
 
 $(STAGE1): $(BUILD)stage1.o src/$(ARCH)/stage1.S src/$(ARCH)/stage1.ld
