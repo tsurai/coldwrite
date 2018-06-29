@@ -29,6 +29,7 @@ DISK := disk.img
 STAGE1 := stage1.bin
 STAGE2 := stage2.elf
 PAYLOAD := payload.bin
+PAYLOAD_SECTOR = $(shell wc -c < $(PAYLOAD) | awk '{ printf("%.0f", $$1/512+0.999) }')
 
 .PHONY: all clean
 
@@ -65,4 +66,5 @@ $(BUILD)stage1.o: src/$(ARCH)/stage1.S Makefile
 	$(AS) $(ASFLAGS) -o $@ $<
 
 $(BUILD)stage2.o: src/$(ARCH)/stage2.S Makefile
+	sed -i 's/\.set sector_count.*/\.set sector_count, $(PAYLOAD_SECTOR)/g' src/$(ARCH)/stage2.S
 	$(AS) $(ASFLAGS) -o $@ $<

@@ -3,6 +3,11 @@ magic:
     .align 8
     .long 0x41495241
 
+.set sector_offset, 0x2
+.set destination, 0x100000
+# set automatically by make
+.set sector_count, 1954
+
 .section .text
 .globl start
 .code32
@@ -27,10 +32,16 @@ start:
     out %al, $0x92
     .a20set:
 
+    # initialize all necessary register to zero
+    xor %eax, %eax
+    mov %eax, %ebx
+    mov %eax, %ecx
+    mov %eax, %edi
+
     # set data transfer data
-    mov $0x8, %ebx          # count of sectors to be read
-    mov $0x2, %ecx          # LBA offset
-    mov $0x100000, %edi     # destination buffer memory address
+    mov $sector_count, %ebx      # count of sectors to be read
+    mov $sector_offset, %ecx     # LBA offset
+    mov $destination, %edi       # destination buffer memory address
 
     # read data from disk into memory
     call ata_pio28_read
@@ -52,55 +63,109 @@ ata_pio28_read:
     mov $0x00, %al
     out %al, %dx
 
-    # set sector count to be read
-    mov $0x1f2, %dx
-    mov %bl, %al
-    out %al, %dx
-
-    # set lowest bytw of LBA
+    # set lowest byte of LBA
     mov $0x1f3, %dx
     mov %ecx, %eax
     out %al, %dx
 
-    # set second lowest bytw of LBA
+    # set second lowest byte of LBA
     mov $0x1f4, %dx
     mov %ah, %al
     out %al, %dx
 
-    #set third lowest bytw of LBA
+    #set third lowest byte of LBA
     mov $0x1f5, %dx
     shr $16, %eax
     out %al, %dx
+
+    # set sector count to be read
+    # PIO can only read 255 sectors at once
+    xor %eax, %eax
+    mov $0x1f2, %dx
+
+    # split into chunks of <= 255 sectors
+    mov $0xff, %al
+    cmp $0xff, %bx
+    jg .skip
+    mov %bl, %al
+    .skip:
+
+    # increase LBA
+    add %eax, %ecx
+
+    # decrease sectors to read
+    sub %eax, %ebx
+
+    # set sectors to be read from disk
+    out %al, %dx
+
+    # save LBA, sector count and the current chunk size on the stack
+    push %ebx
+    push %ecx
+    push %ax
 
     # send read sectors command
     mov $0x1f7, %dx
     mov $0x20, %al
     out %al, %dx
 
+    # ignore error bit the first four times as the ATA specs suggest a
+    # 400ms delay before trying to send a command
     mov $0x4, %ecx
-    .lp1:
+    .delay_loop:
+
+    # read the status flag
     in %dx, %al
+
+    # is BUSY set
     test $0x80, %al
     jne .retry
+
+    # is DRQ set
     test $0x8, %al
     jne .data_rdy
+
+    # retry up to four times
     .retry:
     dec %ecx
-    jg .lp1
+    jg .delay_loop
+
+    # pop the chunk size into bx
+    xor %ebx, %ebx
+    pop %bx
 
     .prior:
+    # ead the status flag
     mov $0x1f7, %dx
     in %dx, %al
+
+    # is still busy
     test $0x80, %al
     jne .prior
 
+    # is ERR or DF
+    test $0x21, %al
+    jne .read_error
+
+    # copy 256 16-bit words from the I/O port into memory at edi
     .data_rdy:
     mov $0x100, %ecx
     mov $0x1f0, %dx
     rep insw
+    mov $0x1f7, %dx
 
-    dec %ebx
-    test %bl, %bl
+    # decrease the current chunk count and read more if there is more
+    dec %bx
+    test %bx, %bx
     jne .prior
+
+    # restore the LBA and sector count
+    pop %ecx
+    pop %ebx
+
+    # repeat until all sectors have been read
+    test %ebx, %ebx
+    jnz ata_pio28_read
+    ret
 
     ret
