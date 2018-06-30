@@ -36,7 +36,7 @@ start:
     call get_vga_info
 
     mov $writing_str, %esi
-    call print32
+    call print_str
 
     # initialize all necessary register to zero
     xor %eax, %eax
@@ -53,7 +53,7 @@ start:
     call ata_pio28_read
 
     mov $done_str, %esi
-    call print32
+    call print_str
 
     cli
     hlt
@@ -179,7 +179,7 @@ ata_pio28_read:
 
     .read_error:
     mov $failed_str, %esi
-    call print32
+    call print_str
     ret
 
 get_vga_info:
@@ -253,7 +253,7 @@ set_cursor_pos:
     mov %bx, video_offset
     ret
 
-print32:
+print_str:
     # clear ecx
     xor %ecx, %ecx
 
@@ -283,6 +283,42 @@ print32:
     # set the new cursor position
     mov %ecx, %ebx
     call set_cursor_pos
+    ret
+
+print_byte_as_hex:
+    xor %ecx, %ecx
+
+    mov video_memory, %edi
+    mov video_offset, %cx
+
+    mov $0x07, %ah
+    movw (%esi), %bx
+
+    # print the upper hex symbol
+    mov %bh, %al
+    call dec_to_hex_ascii
+    movw %ax, (%edi,%ecx,2)
+
+    inc %cx
+
+    # print the lower hex symbol
+    mov %bl, %al
+    call dec_to_hex_ascii
+    movw %ax, (%edi,%ecx,2)
+
+    # advance the offset counter
+    mov %cx, video_offset
+
+    ret
+
+dec_to_hex_ascii:
+    cmp $0xA, %al
+    jl .decimal
+    add $0x8, %al
+
+    .decimal:
+    add $0x30, %al
+
     ret
 
 .section .rodata
