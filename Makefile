@@ -25,7 +25,7 @@ LINKFLAGS += -z max-page-size=0x1000
 # objects
 OBJS := stage2.o
 OBJS := $(OBJS:%=$(BUILD)%)
-DISK := disk.img
+IMAGE := coldwrite.img
 STAGE1 := stage1.bin
 STAGE2 := stage2.elf
 PAYLOAD := payload.bin
@@ -33,21 +33,21 @@ PAYLOAD_SECTOR = $(shell wc -c < $(PAYLOAD) | awk '{ printf("%.0f", $$1/512+0.99
 
 .PHONY: all clean
 
-all: $(DISK) $(STAGE1) $(STAGE2) $(PAYLOAD)
-	dd if=stage1.bin of=disk.img conv=notrunc
-	dd if=stage2.bin of=disk.img obs=512 seek=1 conv=notrunc
-	dd if=payload.bin of=disk.img obs=1536 seek=1 conv=notrunc
+all: $(IMAGE) $(STAGE1) $(STAGE2) $(PAYLOAD)
+	dd if=stage1.bin of=coldwrite.img conv=notrunc
+	dd if=stage2.bin of=coldwrite.img obs=512 seek=1 conv=notrunc
+	dd if=payload.bin of=coldwrite.img obs=1536 seek=1 conv=notrunc
 
 clean:
-	$(RM) -rf $(STAGE1) $(STAGE2) stage2.bin *.dsm *.sym $(DISK) $(BUILD)
+	$(RM) -rf $(STAGE1) $(STAGE2) stage2.bin *.dsm *.sym $(IMAGE) $(BUILD)
 
 test: all
-	$(QEMU) -no-reboot -d int -drive file=disk.img,format=raw
+	$(QEMU) -no-reboot -d int -drive file=coldwrite.img,format=raw
 
-$(DISK):
+$(IMAGE):
 	# create a 3kb disk image with a valid boot partition and MBR
-	dd if=/dev/zero of=disk.img bs=1000 count=3
-	(echo o; echo n; echo p; echo 1; echo ""; echo ""; echo a; echo w; echo q) | sudo fdisk disk.img
+	dd if=/dev/zero of=coldwrite.img bs=1000 count=3
+	(echo o; echo n; echo p; echo 1; echo ""; echo ""; echo a; echo w; echo q) | sudo fdisk coldwrite.img
 
 $(STAGE1): $(BUILD)stage1.o src/$(ARCH)/stage1.S src/$(ARCH)/stage1.ld
 	$(LD) -o $@ -T $(STAGE1LINKSCRIPT) $(LINKFLAGS) --oformat binary build/$(ARCH)/stage1.o
