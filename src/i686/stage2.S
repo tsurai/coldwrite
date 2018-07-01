@@ -4,7 +4,6 @@ magic:
     .long 0x41495241
 
 .set sector_offset, 0x3
-.set destination, 0x100000
 # set automatically by make
 .set sector_count, 1954
 
@@ -35,7 +34,16 @@ start:
     # get the vga test buffer address and cursor position
     call get_vga_info
 
+    # get a valid save location for the payload
+    call get_save_location
+
     mov $writing_str, %esi
+    call print_str
+
+    mov $destination, %esi
+    call print_addr
+
+    mov $dots_str, %esi
     call print_str
 
     # initialize all necessary register to zero
@@ -47,7 +55,7 @@ start:
     # set data transfer data
     mov $sector_count, %ebx      # count of sectors to be read
     mov $sector_offset, %ecx     # LBA offset
-    mov $destination, %edi      # destination memory address
+    mov destination, %edi        # destination memory address
 
     # read data from disk into memory
     call ata_pio28_read
@@ -57,6 +65,72 @@ start:
 
     cli
     hlt
+
+get_save_location:
+    # get the number of memory map entries
+    xor %ecx, %ecx
+    movw (0x1500), %cx
+
+    # make esi point to the start of the memory map
+    mov $0x1502, %esi
+
+    # get the region type of the current entry
+    .next_entry:
+    movl 16(%esi), %eax
+    test $0x1, %eax
+    jz .get_next
+
+    # get the start address of the memory block
+    mov (%esi), %eax
+
+    # get the block size
+    mov 8(%esi), %ebx
+
+    # skip if it is part of the BDA or EBDA
+    # A memory block may start within the BDA and still be long enough to
+    # contain the payload after the BDA end at 0x100000
+
+    # get the difference between the block starting address and the BDA end
+    mov %eax, %ecx
+    sub $0x100000, %ecx
+
+    # skip ahead if they don't overlap
+    jns .check_size
+
+    # check if the block size is large enough to include the difference
+    neg %ecx
+    cmp %ecx, %ebx
+    jb .get_next
+
+    # adjust the block start and size with the difference to the BDA
+    sub %ecx, %ebx
+    add %ecx, %eax
+
+    # calculate the size of the payload in bytes
+    .check_size:
+    mov $sector_count, %ecx
+    imul $0x200, %ecx
+
+    # check if the memory block is large enough for the payload
+    cmp %ebx, %ecx
+    ja .get_next
+
+    # save the payload destination address and return
+    mov %eax, destination
+    ret
+
+    # check if there are more entries in the memory map and process next
+    .get_next:
+    inc %bx
+    add $0x14, %esi
+    cmp %bx, %cx
+    jne .next_entry
+
+    # no suitable destination for the payload has been found
+    .map_end:
+    mov $no_save_location_str, %esi
+    call throw_error
+    ret
 
 ata_pio28_read:
     # select master and set highest 4 bits of the LBA
@@ -143,8 +217,8 @@ ata_pio28_read:
     xor %ebx, %ebx
     pop %bx
 
+    # read the status flag
     .prior:
-    # ead the status flag
     mov $0x1f7, %dx
     in %dx, %al
 
@@ -179,7 +253,8 @@ ata_pio28_read:
 
     .read_error:
     mov $failed_str, %esi
-    call print_str
+    call throw_error
+
     ret
 
 get_vga_info:
@@ -266,7 +341,7 @@ print_str:
     # load the first character
     movb (%esi), %al
 
-    .print_cont:
+    .next_char:
     movw %ax, (%edi,%ecx,2)
 
     # increase source and offset pointer
@@ -278,11 +353,32 @@ print_str:
 
     # continue until it's a NULL byte
     test %al, %al
-    jnz .print_cont
+    jnz .next_char
 
     # set the new cursor position
     mov %ecx, %ebx
     call set_cursor_pos
+    ret
+
+print_addr:
+    # iterate over all four bytes
+    mov $0x3, %ecx
+
+    # get the load byte
+    .next_byte:
+    mov (%esi, %ecx, 1), %bl
+
+    call print_byte_as_hex
+
+    # iterate until all bytes have been printed
+    dec %ecx
+    cmp $0x0, %ecx
+    jge .next_byte
+
+    # set the new cursor position
+    mov video_offset, %ebx
+    call set_cursor_pos
+
     ret
 
 print_byte_as_hex:
@@ -293,7 +389,6 @@ print_byte_as_hex:
     mov video_offset, %cx
 
     mov $0x07, %ah
-    mov (%esi), %bl
 
     # print the upper hex symbol
     mov %bl, %al
@@ -327,15 +422,26 @@ dec_to_hex_ascii:
     add $0x30, %al
     ret
 
+throw_error:
+    call print_str
+    cli
+    hlt
+
 .section .rodata
 writing_str:
-    .string "Writing payload into memory... "
+    .string "Writing payload into memory at 0x"
+dots_str:
+    .string "... "
 done_str:
     .string "done"
 failed_str:
     .string "failed"
+no_save_location_str:
+    .string "Failed to find a valid save location"
 
 .section .bss
+destination:
+    .quad 0
 video_memory:
     .quad 0
 video_offset:
