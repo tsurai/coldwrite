@@ -3,7 +3,7 @@ magic:
     .align 8
     .long 0x41495241
 
-.set sector_offset, 0x2
+.set sector_offset, 0x3
 .set destination, 0x100000
 # set automatically by make
 .set sector_count, 1954
@@ -47,7 +47,7 @@ start:
     # set data transfer data
     mov $sector_count, %ebx      # count of sectors to be read
     mov $sector_offset, %ecx     # LBA offset
-    mov $destination, %edi       # destination buffer memory address
+    mov $destination, %edi      # destination memory address
 
     # read data from disk into memory
     call ata_pio28_read
@@ -286,16 +286,18 @@ print_str:
     ret
 
 print_byte_as_hex:
+    pushal
     xor %ecx, %ecx
 
     mov video_memory, %edi
     mov video_offset, %cx
 
     mov $0x07, %ah
-    movw (%esi), %bx
+    mov (%esi), %bl
 
     # print the upper hex symbol
-    mov %bh, %al
+    mov %bl, %al
+    shr $0x4, %al
     call dec_to_hex_ascii
     movw %ax, (%edi,%ecx,2)
 
@@ -303,22 +305,26 @@ print_byte_as_hex:
 
     # print the lower hex symbol
     mov %bl, %al
+    and $0xf, %al
     call dec_to_hex_ascii
     movw %ax, (%edi,%ecx,2)
 
-    # advance the offset counter
+    # advance the offset counter without changing the cursor position
+    # it is the callees responsibility to set the cursor after all hex
+    # values have been printed
+    inc %cx
     mov %cx, video_offset
 
+    popal
     ret
 
 dec_to_hex_ascii:
     cmp $0xA, %al
     jl .decimal
-    add $0x8, %al
+    add $0x7, %al
 
     .decimal:
     add $0x30, %al
-
     ret
 
 .section .rodata
