@@ -82,7 +82,7 @@ save_memory_map:
     # Set the save location for the memory map
     xor %ax, %ax
     mov %ax, %es
-    mov $0x1500, %di
+    mov $0x1502, %di
 
     # Set the initial offset to zero
     xor %ebx, %ebx
@@ -97,7 +97,7 @@ save_memory_map:
     xor %eax, %eax
     mov $0xe820, %eax
 
-    # Copy 24 bytes at a time
+    # Copy 20 bytes at a time
     mov $0x14, %ecx
     int $0x15
     jc .map_end
@@ -105,16 +105,18 @@ save_memory_map:
     # Increment the entry counter dl
     inc %bp
 
-    # Increment di by the map entry size of 24 bytes
+    # Increment di by the map entry size of 20 bytes
     add $0x14, %di
 
     # Test for more entries
     test %ebx, %ebx
     jne .map_loop
 
+    # save the number of memory map entries
     .map_end:
-    movw %bp, 0x1600
+    movw %bp, 0x1500
     clc
+
     ret
 
 load:
