@@ -329,6 +329,11 @@ set_cursor_pos:
     ret
 
 print_str:
+    push %ecx
+    push %edi
+    push %ax
+    push %bx
+
     # clear ecx
     xor %ecx, %ecx
 
@@ -346,7 +351,7 @@ print_str:
 
     # increase source and offset pointer
     inc %esi
-    inc %ecx
+    inc %cx
 
     # load the next byte
     movb (%esi), %al
@@ -356,8 +361,14 @@ print_str:
     jnz .next_char
 
     # set the new cursor position
-    mov %ecx, %ebx
+    mov %cx, %bx
     call set_cursor_pos
+
+    pop %bx
+    pop %ax
+    pop %edi
+    pop %ecx
+
     ret
 
 print_hex_16:
