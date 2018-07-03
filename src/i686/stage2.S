@@ -263,11 +263,19 @@ get_vga_info:
 
     # bit 4-5 signal the VGA display mode
     and $0x30, %ax
-    cmp $0x20, %ax
-    jg .monochrome
+    cmp $0x30, %ax
+    je .monochrome
 
     # use color mode buffer address
     movl $0xb8000, video_memory
+
+    cmp $0x20, %ax
+    je .80x25
+    movb $40, text_cols
+    jmp .get_pos
+
+    .80x25:
+    movb $80, text_cols
     jmp .get_pos
 
     # use monochrome mode buffer address
@@ -369,6 +377,30 @@ print_str:
     pop %edi
     pop %ecx
 
+    ret
+
+print_newline:
+    push %ax
+    push %bx
+
+    mov video_offset, %ax
+    mov text_cols, %bl
+    div %bl
+
+
+    xor %al, %al
+    shr $0x8, %ax
+    mov text_cols, %bx
+    sub %ax, %bx
+
+    mov video_offset, %ax
+    add %bx, %ax
+    movw %ax, %bx
+
+    call set_cursor_pos
+
+    pop %bx
+    pop %ax
     ret
 
 print_hex_16:
@@ -483,3 +515,5 @@ video_memory:
     .quad 0
 video_offset:
     .word 0
+text_cols:
+    .byte 0
