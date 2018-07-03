@@ -34,6 +34,9 @@ start:
     # get the vga test buffer address and cursor position
     call get_vga_info
 
+    # print the memory map entries
+    call print_memory_map
+
     # get a valid save location for the payload
     call get_save_location
 
@@ -65,6 +68,46 @@ start:
 
     cli
     hlt
+
+print_memory_map:
+    # get the number of memory map entries
+    xor %ecx, %ecx
+    xor %ebx, %ebx
+    movw (0x1500), %cx
+
+    # make esi point to the start of the memory map
+    mov $0x1502, %eax
+
+    # print the starting address of the block
+    .next:
+    movl %eax, %esi
+    call print_hex_32
+
+    mov $sep_str, %esi
+    call print_str
+
+    # print the block size
+    add $0x8, %eax
+    movl %eax, %esi
+    call print_hex_32
+
+    mov $sep_str, %esi
+    call print_str
+
+    # print the block type (0x01 means free for use)
+    add $0x8, %eax
+    movl %eax, %esi
+    call print_hex_16
+
+    call print_newline
+
+    # check if there are more entries in the memory map and process next
+    inc %bx
+    add $0x4, %eax
+    cmp %bx, %cx
+    jne .next
+
+    ret
 
 get_save_location:
     # get the number of memory map entries
@@ -501,6 +544,8 @@ writing_str:
     .string "Writing payload into memory at 0x"
 dots_str:
     .string "... "
+sep_str:
+    .string " | "
 done_str:
     .string "done"
 failed_str:
