@@ -41,7 +41,7 @@ start:
     call print_str
 
     mov $destination, %esi
-    call print_addr
+    call print_hex_32
 
     mov $dots_str, %esi
     call print_str
@@ -360,9 +360,30 @@ print_str:
     call set_cursor_pos
     ret
 
-print_addr:
+print_hex_16:
+     push %ecx
+
+    # iterate over all four bytes
+    mov $0x1, %ecx
+    call print_hex_x
+
+    pop %ecx
+    ret
+
+print_hex_32:
+    push %ecx
+
     # iterate over all four bytes
     mov $0x3, %ecx
+    call print_hex_x
+
+    pop %ecx
+    ret
+
+print_hex_x:
+    push %ebx
+    push %ax
+    push %bx
 
     # get the load byte
     .next_byte:
@@ -379,10 +400,15 @@ print_addr:
     mov video_offset, %ebx
     call set_cursor_pos
 
+    pop %bx
+    pop %ax
+    pop %ebx
+
     ret
 
 print_byte_as_hex:
-    pushal
+    push %ecx
+
     xor %ecx, %ecx
 
     mov video_memory, %edi
@@ -410,7 +436,7 @@ print_byte_as_hex:
     inc %cx
     mov %cx, video_offset
 
-    popal
+    pop %ecx
     ret
 
 dec_to_hex_ascii:
