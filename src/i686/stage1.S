@@ -181,7 +181,7 @@ error_str:
 dapack:
     .byte 0x10
     .byte 0
-    .word 2
+    .word 3
     .word 0x7e00
     .word 0
     .long 1

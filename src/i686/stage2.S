@@ -3,7 +3,7 @@ magic:
     .align 8
     .long 0x41495241
 
-.set sector_offset, 0x3
+.set sector_offset, 0x4
 # set automatically by make
 .set sector_count, 1954
 
@@ -173,6 +173,94 @@ get_save_location:
     .map_end:
     mov $no_save_location_str, %esi
     call throw_error
+    ret
+
+ata_identify:
+    push %ax
+    push %dx
+    push %ecx
+    push %edi
+
+    # select master and set highest 4 bits of the LBA
+    mov $0x1f6, %dx
+    mov $0xa0, %al
+    out %al, %dx
+
+    # set lowest byte of LBA to zero
+    mov $0x1f3, %dx
+    mov $0x0, %al
+    out %al, %dx
+
+    # set second lowest byte of LBA to zero
+    mov $0x1f4, %dx
+    out %al, %dx
+
+    #set third lowest byte of LBA to zero
+    mov $0x1f5, %dx
+    out %al, %dx
+
+    # set sector count to be read to zero
+    mov $0x1f2, %dx
+    out %al, %dx
+
+    # send identify command
+    mov $0x1f7, %dx
+    mov $0xec, %al
+    out %al, %dx
+
+    # check BSY flag
+    .identify_bsy_retry:
+    in %dx, %al
+    test $0x80, %al
+    jnz .identify_bsy_retry
+
+    # check ERR flag
+    test $0x01, %al
+    jnz .no_drive
+
+    # check DF flag
+    test $0x20, %al
+    jnz .no_drive
+
+    # check LBAmid and LBAhigh for zero
+    mov $0x1f4, %dx
+    in %dx, %al
+    cmp $0x0, %al
+    jne .no_drive
+
+    add $0x01, %dx
+    in %dx, %al
+    cmp $0x0, %al
+    jne .no_drive
+
+    # wait for DRQ to set
+    .identify_drq_retry:
+    mov $0x1f7, %dx
+    in %dx, %al
+    test $0x08, %al
+    jnz .identify_read
+
+    # check ERR flag
+    test $0x01, %al
+    jnz .no_drive
+
+    # check DF flag
+    test $0x20, %al
+    jnz .no_drive
+
+    jmp .identify_drq_retry
+
+    .identify_read:
+    mov $0x1f0, %dx
+    mov $0x100, %ecx
+    mov destination, %edi
+    rep insw
+
+    .no_drive:
+    pop %edi
+    pop %ecx
+    pop %dx
+    pop %ax
     ret
 
 ata_pio28_read:
@@ -562,3 +650,7 @@ video_offset:
     .word 0
 text_cols:
     .byte 0
+identify_map:
+    .rept 256
+        .word 0
+    .endr

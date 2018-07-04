@@ -36,7 +36,7 @@ PAYLOAD_SECTOR = $(shell wc -c < $(PAYLOAD) | awk '{ printf("%.0f", $$1/512+0.99
 all: $(IMAGE) $(STAGE1) $(STAGE2) $(PAYLOAD)
 	dd if=stage1.bin of=coldwrite.img conv=notrunc
 	dd if=stage2.bin of=coldwrite.img obs=512 seek=1 conv=notrunc
-	dd if=payload.bin of=coldwrite.img obs=1536 seek=1 conv=notrunc
+	dd if=payload.bin of=coldwrite.img obs=2048 seek=1 conv=notrunc
 
 clean:
 	$(RM) -rf $(STAGE1) $(STAGE2) stage2.bin *.dsm *.sym $(IMAGE) $(BUILD)
