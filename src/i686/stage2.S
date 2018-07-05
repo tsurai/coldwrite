@@ -253,7 +253,7 @@ ata_identify:
     .identify_read:
     mov $0x1f0, %dx
     mov $0x100, %ecx
-    mov destination, %edi
+    mov identify_map, %edi
     rep insw
 
     .no_drive:
